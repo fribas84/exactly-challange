@@ -14,7 +14,7 @@ contract Ethpool is AccessControl  {
 
   mapping(address => uint) public balances;
   mapping(address=>uint) public shares;
-  bool[] beneficiaryList;
+  address[] beneficiaryList;
   
   uint contractBalance;
 
@@ -25,8 +25,8 @@ contract Ethpool is AccessControl  {
 
 
   function deposit() payable external{
-    if (hasrole(keccak256("TEAM_ROLE"),msg.sender)) {
-      _teamDeposit(msg.sender,msg.value);
+    if (hasRole(keccak256("TEAM_ROLE"),msg.sender)) {
+      _teamDeposit(msg.value);
     }
     else {
       _userDeposit(msg.sender, msg.value);
@@ -35,30 +35,33 @@ contract Ethpool is AccessControl  {
 
   function _userDeposit(address user, uint value) internal {
 
-    beneficiaryList[user] = True; // mal, validar si user es beneficiario previamente, 
+   // beneficiaryList[user] = True; // mal, validar si user es beneficiario previamente, 
     
     
     balances[user] = balances[user].add(value);
     contractBalance = contractBalance.add(value); 
-    shares[user] = balances[user].tryDiv(contractBalance).mul(100);
+    shares[user] = balances[user].div(contractBalance);
+    shares[user] = balances[user].mul(100);
+
 
   }
 
   function _teamDeposit(uint value) internal {
     uint i;
+    uint balance;
     contractBalance = contractBalance.add(value);
     for (i = 0; i < beneficiaryList.length;i++){
-
+      balance = balances[beneficiaryList[i]];
     }
 
-  }e
+  }
 
 
-  function withdraw();
+  //function withdraw();
 
-  function grantTeamRole(address member) public (){
+  function grantTeamRole(address member) public {
     //a Team member cannot contain balance in the EthPool
-    require(balance[member]==0,"This address contains funds in Balance.")
+    require(balances[member]==0,"This address contains funds in Balance.");
     grantRole(keccak256("TEAM_ROLE"),member);      
   }
 
