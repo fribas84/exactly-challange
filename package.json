@@ -1,0 +1,14 @@
+{
+  "name": "exactly-challange",
+  "version": "1.0.0",
+  "description": "Exactly Finance Solidity chalange",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "fribas84@gmail.com",
+  "license": "ISC",
+  "dependencies": {
+    "@openzeppelin/contracts": "^4.4.1"
+  }
+}
