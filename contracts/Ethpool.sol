@@ -23,12 +23,12 @@ contract Ethpool is AccessControl  {
   address[] beneficiaryList;
   
   struct BeneficiaryStruct{
-    address _address;
+    uint lastDeposit;
     uint listPointer;
   }
   mapping (address => BeneficiaryStruct) beneficiaryStructs;
 
-  
+  uint public lastRewardBlock; 
 
   constructor() public {
 
@@ -37,6 +37,13 @@ contract Ethpool is AccessControl  {
   }
 
 
+  function _rewardPerBlock(uint _reward) internal returns (uint){
+      
+      uint rewardBlockLenght = block.number - lastRewardBlock;
+      return _reward.div(rewardBlockLenght);
+
+
+  }
   function deposit() payable external{
     if (hasRole(keccak256("TEAM_ROLE"),msg.sender)) {
       _teamDeposit(msg.value);
@@ -51,63 +58,69 @@ contract Ethpool is AccessControl  {
         @param _user The account address.
         @param _value Deposit Value.
     */
-  function _userDeposit(address _user, uint _value) internal {
-    if(!_isEntity(_user)) {
-      beneficiaryList.push(_user);
-      beneficiaryStructs[_user].listPointer= beneficiaryList.length - 1;
+  function _userDeposit(address _user,uint _value)
+    internal {
+      if(!_isEntity(_user)) {
+        beneficiaryList.push(_user);
+        beneficiaryStructs[_user].listPointer= beneficiaryList.length - 1;
+      }
+      balances[_user] = balances[_user].add(_value);
+      contractBalance = contractBalance.add(_value);
+      beneficiaryStructs[_user].lastDeposit = block.number; 
     }
-    balances[_user] = balances[_user].add(_value);
-    contractBalance = contractBalance.add(_value);
-  }
-  
 
+  function getBalance(address user)
+    external view returns(uint){
+      return balances[user];
+    }
 
-  function getBalance(address user) external view returns(uint){
-    return balances[user];
+  function _teamDeposit(uint _rwd)
+    internal {
+      contractBalance = contractBalance.add(_rwd);
+      rewardsToDiburse = _rwd;
+      _diburseRewards(_rwd);
+      lastRewardBlock = block.number;
+      contractBalance = contractBalance.add(_rwd);
 
-  }
+    }
 
-  function _teamDeposit(uint value) internal {
-   
-    contractBalance = contractBalance.add(value);
-    rewardsToDiburse = rewardsToDiburse.add(value);
-    _diburseRewards();
-  }
+  function _diburseRewards(uint _rwd) 
+  internal {
 
-  function _diburseRewards() internal {
-
-    uint rewardsPerToken = contractBalance.div(rewardsToDiburse);
+    uint rwdPerBlock =  _rewardPerBlock(_rwd);
     for (uint256 i = 0; i < beneficiaryList.length; i++) {
       if(balances[beneficiaryList[i]]>0){
-        accumulatedRewards[beneficiaryList[i]] = (accumulatedRewards[beneficiaryList[i]].add(balances[beneficiaryList[i]])).mul(rewardsPerToken); 
+        accumulatedRewards[beneficiaryList[i]] =
+        (accumulatedRewards[beneficiaryList[i]].add(balances[beneficiaryList[i]])).mul(rwdPerBlock); 
         }   
-   }
+      }
   }
 
-  function withdraw(uint _amount) external {
-    require(balances[msg.sender]>= _amount, 'Insufficient balance.');
-    balances[msg.sender] = balances[msg.sender].sub(_amount);
-    payable(msg.sender).transfer(_amount);
-    if(balances[msg.sender]==0){
-      _deleteEntity(msg.sender);
-    }
+  function withdraw(uint _amount)
+    external {
+      require(balances[msg.sender]>= _amount, "Insufficient balance.");
+      balances[msg.sender] = balances[msg.sender].sub(_amount);
+      payable(msg.sender).transfer(_amount);
+      if(balances[msg.sender]==0){
+        _deleteEntity(msg.sender);
+      }
   }
 
-  function claimRewards(uint _amount) external {
-    require(accumulatedRewards[msg.sender]>0,'Insufficient rewards to claim.');
-    accumulatedRewards[msg.sender] = accumulatedRewards[msg.sender].sub(_amount);
-    payable(msg.sender).transfer(_amount);
+  function claimRewards(uint _amount)
+    external {
+      require(accumulatedRewards[msg.sender]>0,"Insufficient rewards to claim.");
+      accumulatedRewards[msg.sender] = accumulatedRewards[msg.sender].sub(_amount);
+      payable(msg.sender).transfer(_amount);
   }
 
   /*  @notice Grant team role to an specific account. 
       @param _member Address of the account to add a team role.
   */
-  function grantTeamRole(address _member) public {
-    require(balances[_member]==0,"This address contains funds in Balance.");
-    grantRole(keccak256("TEAM_ROLE"),_member);      
+  function grantTeamRole(address _member)
+    public {
+      require(balances[_member]==0,"This address contains funds in Balance.");
+      grantRole(keccak256("TEAM_ROLE"),_member);      
   }
-
-
 
   function getContractBalance() external view returns (uint){
     return contractBalance;
@@ -121,23 +134,24 @@ contract Ethpool is AccessControl  {
       @param _address Address of the account
       @return If the account is a beneficiary or not as Boolean
   */
-  function _isEntity(address _address) internal view returns(bool isIndeed) {
-    if(beneficiaryList.length == 0) return false;
-    return (beneficiaryList[beneficiaryStructs[_address].listPointer] == _address);
+  function _isEntity(address _address)
+    internal view returns(bool isIndeed) {
+      if(beneficiaryList.length == 0) return false;
+      return (beneficiaryList[beneficiaryStructs[_address].listPointer] == _address);
   }
 
   /*  @notice delete beneficiary entity from list and resets the related struct.
       @dev It swaps the row to delete with the latest of the array and just do a pop.
       @param _address Address of the account to delete.
   */  
-  function _deleteEntity(address _address) internal {
-    if(!_isEntity(_address)) revert();
-    uint rowToDelete = beneficiaryStructs[_address].listPointer; 
-    address keyToMove   = beneficiaryList[beneficiaryList.length-1];
-    beneficiaryList[rowToDelete] = keyToMove;
-    beneficiaryStructs[keyToMove].listPointer = rowToDelete;
-    beneficiaryList.pop();
-    delete beneficiaryStructs[_address];
-  
+  function _deleteEntity(address _address)
+    internal {
+      if(!_isEntity(_address)) revert();
+      uint rowToDelete = beneficiaryStructs[_address].listPointer; 
+      address keyToMove   = beneficiaryList[beneficiaryList.length-1];
+      beneficiaryList[rowToDelete] = keyToMove;
+      beneficiaryStructs[keyToMove].listPointer = rowToDelete;
+      beneficiaryList.pop();
+      delete beneficiaryStructs[_address];
   }
 }
